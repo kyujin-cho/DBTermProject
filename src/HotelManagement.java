@@ -260,7 +260,7 @@ class HotelManagement {
 
     boolean check(String query) {
         try {
-            return !(connector.getQueryResult(query).length == 1);
+            return (connector.getQueryResult(query).length != 1);
         } catch (SQLException e) {
             return false;
         }
@@ -283,20 +283,35 @@ class HotelManagement {
             endDate.add(Calendar.DATE, nights);
             String startDateString = "TO_DATE('" + date + "', 'YYYYMMDD')";
 
-            String[] checks = new String[] {
-                    String.format("SELECT * FROM reservations " +
-                            "WHERE (room_no = %s OR customer = '%s') AND " +
-                            "((start_date > %s AND (start_date - %s < %s)) OR " +
-                            "(start_date < %s AND (%s - start_date > %s)) OR " +
-                            "(start_date = %s))", roomNo, name, startDateString, startDateString, nights, startDateString, startDateString, nights, startDateString)
-            };
-            Arrays.stream(checks).forEach(System.out::println);
-
-            if(Arrays.stream(checks).anyMatch(this::check))
-                return "E:CHECK_FAIL";
+            String check =
+                    String.format("SELECT customer, to_char(start_date, 'YYYYMMDD') FDATE , nights, room_no, staff FROM reservations WHERE\n" +
+                            "\t(customer = '%s') AND (\n" +
+                            "\t(start_date > %s AND (%s + %s) > start_date) OR\n" +
+                            "\t(start_date = %s) OR\n" +
+                            "\t(start_date < %s AND (start_date + nights) > %s))", name, startDateString, startDateString, nights, startDateString, startDateString, startDateString);
+            String check2 =
+                    String.format("SELECT customer, to_char(start_date, 'YYYYMMDD') FDATE , nights, room_no, staff FROM reservations WHERE\n" +
+                            "\t(room_no = '%s') AND (\n" +
+                            "\t(start_date > %s AND (%s + %s) > start_date) OR\n" +
+                            "\t(start_date = %s) OR\n" +
+                            "\t(start_date < %s AND (start_date + nights) > %s))", roomNo, startDateString, startDateString, nights, startDateString, startDateString, startDateString);
+            if(check(check2))
+                return "E:ALREADY_RESERVED";
+            try {
+                String[][] result = connector.getQueryResult(check);
+                if (result.length != 1) {
+                    String[] duplicate = result[1];
+                    cancelReservation(name, duplicate[Arrays.asList(result[0]).indexOf("FDATE")]);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
 
             String[] staffs = Arrays.stream(connector.getQueryResult("SELECT name FROM staff")).skip(1).map(t -> t[0]).toArray(String[]::new);
-            String staff = staffs[(int)(Math.random() * staffs.length)];
+            System.out.println(Arrays.toString(staffs));
+            int index =(int) Math.floor(Math.random() * staffs.length);
+            System.out.println(index);
+            String staff = staffs[index];
 
             connector.executeQuery(String.format("INSERT INTO reservations VALUES('%s', TO_DATE('%s', 'YYYYMMDD'), %s, %s, '%s')", name, date, nights, roomNo, staff));
 
@@ -309,14 +324,15 @@ class HotelManagement {
     }
 
     // TODO: 투숙 정보 없이 이름만 가지고 예약 취소 가능케 하기 - 1인 1예약만 가능하니까
-    String cancelReservation(String name, String date, int nights, int roomNo) throws SQLException {
-        String query = String.format("SELECT * FROM reservations WHERE customer='%s' AND start_date=TO_DATE('%s', 'YYYYMMDD') AND NIGHTS=%s AND room_no=%s", name, date, nights, roomNo);
+    String cancelReservation(String name, String date) throws SQLException {
+        String query = String.format("SELECT * FROM reservations WHERE customer='%s' AND start_date=TO_DATE('%s', 'YYYYMMDD')", name, date);
         String[][] result = connector.getQueryResult(query);
         if(result.length == 1)
             return "E:NO_SUCH_RESERVATION";
-        connector.executeQuery(String.format("DELETE FROM reservations WHERE customer='%s' AND start_date=TO_DATE('%s', 'YYYYMMDD') AND NIGHTS=%s AND room_no=%s", name, date, nights, roomNo));
+        connector.executeQuery(String.format("DELETE FROM reservations WHERE customer='%s' AND start_date=TO_DATE('%s', 'YYYYMMDD')", name, date));
         return "I:DONE";
     }
+
 
     boolean[] getReservations() throws SQLException {
         return getReservations(new Date(System.currentTimeMillis()));
@@ -406,11 +422,12 @@ class HotelManagement {
                 e.printStackTrace();
             }
         }
-
+        System.out.println(staffs.isEmpty());
+        System.out.println(customers.isEmpty());
         Map.Entry<String, Integer> staffInfo = new BasicEntry<>("", 0);
-        if(!staffs.isEmpty()) staffs.entrySet().stream().max((p1, p2) -> p2.getValue().compareTo(p1.getValue())).get();
+        if(!staffs.isEmpty()) staffInfo = staffs.entrySet().stream().max((p1, p2) -> p2.getValue().compareTo(p1.getValue())).get();
         Map.Entry<String, Integer> customerInfo = new BasicEntry<>("", 0);
-        if(!customers.isEmpty()) customers.entrySet().stream().max((p1, p2) -> p2.getValue().compareTo(p1.getValue())).get();
+        if(!customers.isEmpty()) customerInfo = customers.entrySet().stream().max((p1, p2) -> p2.getValue().compareTo(p1.getValue())).get();
 
         String desc = "객실번호: %s\n수용인원: %s\n타입: %s\n상태: %s\n투숙고객(최다): %s\t\t(%s회)\n객실전담직원(최다): %s\t\t(%s회)";
         desc = String.format(desc, roomNo, row[1], row[2], isVacant ? "비어있음" : "투숙중", customerInfo.getKey(), customerInfo.getValue(), staffInfo.getKey(), staffInfo.getValue());
@@ -469,9 +486,9 @@ class HotelManagement {
         }
 
         Map.Entry<String, Integer> customerInfo = new BasicEntry<>("", 0);
-        if(!customers.isEmpty()) customers.entrySet().stream().max((p1, p2) -> p2.getValue().compareTo(p1.getValue())).get();
+        if(!customers.isEmpty()) customerInfo = customers.entrySet().stream().max((p1, p2) -> p2.getValue().compareTo(p1.getValue())).get();
         Map.Entry<String, Integer> roomInfo = new BasicEntry<>("", 0);
-        if(!rooms.isEmpty()) rooms.entrySet().stream().max((p1, p2) -> p2.getValue().compareTo(p1.getValue())).get();
+        if(!rooms.isEmpty()) roomInfo =  rooms.entrySet().stream().max((p1, p2) -> p2.getValue().compareTo(p1.getValue())).get();
 
         String desc = "직원명: %s\n성별: %s\n주소: %s\n연락처: %s\n접대 고객(최다): %s\n관리 객실(최다): %s\n";
         desc = String.format(desc, row[0], row[1], row[2], row[3], customerInfo.getKey(), customerInfo.getValue(), roomInfo.getKey(), roomInfo.getValue());

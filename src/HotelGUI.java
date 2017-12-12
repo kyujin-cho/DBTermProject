@@ -153,9 +153,9 @@ class HotelGUI extends JFrame implements ActionListener{
         queryCustomerNameField = new JTextField();
         queryCustomerNameField.setBounds(80, 30, 90, 20);
         addCustomerButton = new JButton("회원가입");
-        addCustomerButton.setBounds(10, 70, 80, 20);
+        addCustomerButton.setBounds(10, 70, 95, 20);
         queryCustomerButton = new JButton("조회");
-        queryCustomerButton.setBounds(115, 70, 50, 20);
+        queryCustomerButton.setBounds(120, 70, 70, 20);
         customerQueryResultArea = new JTextArea();
         customerQueryResultArea.setEditable(false);
         customerQueryResultArea.setBounds(200, 10, 360, 115);
@@ -195,10 +195,10 @@ class HotelGUI extends JFrame implements ActionListener{
         nameLabel.setBounds(15, 30, 60, 20);
         queryStaffNameField = new JTextField();
         queryStaffNameField.setBounds(80, 30, 90, 20);
-        addStaffButton = new JButton("직원등록");
-        addStaffButton.setBounds(10, 70, 80, 20);
+        addStaffButton = new JButton("회원가입");
+        addStaffButton.setBounds(10, 70, 95, 20);
         queryStaffButton = new JButton("조회");
-        queryStaffButton.setBounds(115, 70, 50, 20);
+        queryStaffButton.setBounds(120, 70, 70, 20);
         staffQueryResultArea = new JTextArea();
         staffQueryResultArea.setEditable(false);
         staffQueryResultArea.setBounds(200, 10, 360, 115);
@@ -265,6 +265,9 @@ class HotelGUI extends JFrame implements ActionListener{
                         case "NO_SUCH_CUSTOMER":
                             showMessageDialog("존재하지 않는 고객입니다");
                             break;
+                        case "ALREADY_RESERVED":
+                            showMessageDialog("이미 예약되었습니다.");
+                            break;
                         default:
                             showMessageDialog(result.substring(2));
                             break;
@@ -277,7 +280,26 @@ class HotelGUI extends JFrame implements ActionListener{
                 e1.printStackTrace();
             }
         } else if(e.getSource() == reservationCancelButton) {
-
+            String customerName = reservationNameField.getText();
+            String checkInDate = reservationCheckInField.getText();
+            try {
+                String result = management.cancelReservation(customerName, checkInDate);
+                if(result.substring(0, 2).equals("E:")) {
+                    switch (result.substring(2)) {
+                        case "NO_SUCH_RESERVATION":
+                            showMessageDialog("존재하지 않는 예약입니다");
+                            break;
+                        default:
+                            showMessageDialog(result.substring(2));
+                            break;
+                    }
+                } else {
+                    showMessageDialog("취소되었습니다");
+                    updateReservationStatus();
+                }
+            } catch (SQLException e1) {
+                e1.printStackTrace();
+            }
         } else if(e.getSource() == addCustomerButton) {
             new CustomerRegistrationDialog(this, "고객 등록", management.connector);
         } else if(e.getSource() == queryCustomerButton) {
@@ -369,7 +391,7 @@ abstract class RegistrationDialog extends JDialog implements ActionListener {
         UIManager.put("swing.boldMetal", Boolean.FALSE);
 
         setTitle("호텔 예약 관리 프로그램");
-        setSize(360, 280);
+        setSize(380, 280);
         setLayout(null);
 
         nameLabel = new JLabel();
