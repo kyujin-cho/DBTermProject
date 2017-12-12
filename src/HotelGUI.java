@@ -77,6 +77,7 @@ class HotelGUI extends JFrame implements ActionListener{
         open = new JMenuItem("Open");
 
         file.add(open);
+        open.addActionListener(this);
         menuBar.add(file);
         setJMenuBar(menuBar);
 
@@ -375,10 +376,14 @@ class HotelGUI extends JFrame implements ActionListener{
             }
         } else if(e.getSource() == open) {
             FileDialog dialog = new FileDialog(this, "Open", FileDialog.LOAD);
+            dialog.setVisible(true);
+            if(dialog.getDirectory() == null || dialog.getDirectory().equals(""))
+
+                return;
             try {
                 BufferedReader fr = new BufferedReader(new FileReader(dialog.getDirectory()));
-                String line;
-                int customerNo = Integer.parseInt(fr.readLine());
+                String line = fr.readLine();
+                int customerNo = Integer.parseInt(line);
                 ArrayList<String> customers = new ArrayList<>();
                 IntStream.range(0, customerNo).forEach(i -> {
                     try {
