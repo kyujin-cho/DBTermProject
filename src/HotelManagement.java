@@ -76,6 +76,15 @@ class Room {
         return "방 번호: " + roomNo + ", 수용인원: " + maxPeople + ", 방 유형: " + roomType.toString();
     }
 
+    static boolean addRoom(Connector connector, int roomNo, int maxPeople, String roomType) {
+        String query = String.format("INSERT INTO room VALUES(%s, %s, '%s')", roomNo, maxPeople, roomType);
+        try {
+            return connector.executeQuery(query);
+        } catch (SQLException e) {
+            return false;
+        }
+
+    }
 
 }
 

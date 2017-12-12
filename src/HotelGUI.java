@@ -3,8 +3,10 @@ import javax.swing.border.LineBorder;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.*;
 import java.sql.SQLException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.regex.Pattern;
@@ -39,7 +41,9 @@ class HotelGUI extends JFrame implements ActionListener{
     JComboBox<String> queryRoomNoComboBox;
     RoomStatus[][] rooms = new RoomStatus[4][5];
     JTextArea customerQueryResultArea, roomQueryResultArea, staffQueryResultArea;
-
+    JMenuBar menuBar;
+    JMenu file;
+    JMenuItem open;
 
     static void showMessageDialog(String msg) {
         JOptionPane.showMessageDialog(null, msg);
@@ -66,6 +70,15 @@ class HotelGUI extends JFrame implements ActionListener{
         titleLabel.setBorder(new LineBorder(Color.BLACK, 2, true));
         titleLabel.setVisible(true);
         mainPanel.add(titleLabel);
+
+        menuBar = new JMenuBar();
+        file = new JMenu("File");
+
+        open = new JMenuItem("Open");
+
+        file.add(open);
+        menuBar.add(file);
+        setJMenuBar(menuBar);
 
         reservationPanel = new JPanel();
         reservationPanel.setLayout(null);
@@ -358,6 +371,56 @@ class HotelGUI extends JFrame implements ActionListener{
                     roomQueryResultArea.setText(result);
                 }
             } catch (SQLException e1) {
+                e1.printStackTrace();
+            }
+        } else if(e.getSource() == open) {
+            FileDialog dialog = new FileDialog(this, "Open", FileDialog.LOAD);
+            try {
+                BufferedReader fr = new BufferedReader(new FileReader(dialog.getDirectory()));
+                String line;
+                int customerNo = Integer.parseInt(fr.readLine());
+                ArrayList<String> customers = new ArrayList<>();
+                IntStream.range(0, customerNo).forEach(i -> {
+                    try {
+                        customers.add(fr.readLine());
+                    } catch (IOException e1) {
+                        e1.printStackTrace();
+                    }
+                });
+                int staffNo = Integer.parseInt(fr.readLine());
+                ArrayList<String> staffs = new ArrayList<>();
+                IntStream.range(0, staffNo).forEach(i -> {
+                    try {
+                        staffs.add(fr.readLine());
+                    } catch (IOException e1) {
+                        e1.printStackTrace();
+                    }
+                });
+                int roomNo = Integer.parseInt(fr.readLine());
+                ArrayList<String> rooms = new ArrayList<>();
+                IntStream.range(0, roomNo).forEach(i -> {
+                    try {
+                        rooms.add(fr.readLine());
+                    } catch (IOException e1) {
+                        e1.printStackTrace();
+                    }
+                });
+
+                customers.forEach(s -> {
+                    String[] customerInfo = s.split("\t");
+                    Customer.addCustomer(management.connector, customerInfo[0], customerInfo[1], customerInfo[2], customerInfo[3]);
+                });
+                staffs.forEach(s -> {
+                    String[] customerInfo = s.split("\t");
+                    Staff.addStaff(management.connector, customerInfo[0], customerInfo[1], customerInfo[2], customerInfo[3]);
+                });
+                customers.forEach(s -> {
+                    String[] customerInfo = s.split("\t");
+                    Room.addRoom(management.connector, Integer.parseInt(customerInfo[0]), Integer.parseInt(customerInfo[1]), customerInfo[2]);
+                });
+            } catch (FileNotFoundException e1) {
+                e1.printStackTrace();
+            } catch (IOException e1) {
                 e1.printStackTrace();
             }
         }
