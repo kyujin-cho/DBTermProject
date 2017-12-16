@@ -1,12 +1,15 @@
 import javax.swing.*;
 import javax.swing.border.LineBorder;
+import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.*;
 import java.sql.SQLException;
+import java.sql.SQLRecoverableException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.regex.Pattern;
@@ -49,8 +52,61 @@ class HotelGUI extends JFrame implements ActionListener{
         JOptionPane.showMessageDialog(null, msg);
     }
 
-    HotelGUI(HotelManagement management) {
-        this.management = management;
+    HotelGUI() {
+        JPanel panel = new JPanel() {
+            @Override
+            public Dimension getPreferredSize() {
+                return new Dimension(300, 100);
+            }
+        };
+        panel.setLayout(null);
+
+        JLabel addrLabel = new JLabel("Server Address: ");
+        JLabel idLabel = new JLabel("ID: ");
+        JLabel pwLabel = new JLabel("PW: ");
+
+        JTextField server = new JTextField();
+        JTextField id = new JTextField(20);
+        JPasswordField pass = new JPasswordField(20);
+
+        addrLabel.setBounds(10, 10, 120, 20);
+        idLabel.setBounds(10, 40, 120, 20);
+        pwLabel.setBounds(10, 70, 120, 20);
+        server.setBounds(120, 10, 160, 20);
+        id.setBounds(120, 40, 160, 20);
+        pass.setBounds(120, 70, 160, 20);
+
+        panel.add(addrLabel);
+        panel.add(server);
+        panel.add(idLabel);
+        panel.add(id);
+        panel.add(pwLabel);
+        panel.add(pass);
+
+        String[] options = new String[]{"OK", "Cancel"};
+        int option = JOptionPane.showOptionDialog(null, panel, "Enter Credentials",
+                JOptionPane.NO_OPTION, JOptionPane.PLAIN_MESSAGE,
+                null, options, options[1]);
+        System.out.println(option);
+        if(option == 0) {
+            String addr = server.getText();
+            String username = id.getText();
+            String password = new String(pass.getPassword());
+            try {
+                management = new HotelManagement(addr, username, password);
+            } catch (Exception e) {
+                System.out.println(e.getMessage());
+                if(e.getMessage().contains("The Network Adapter could not establish the connection"))
+                    showMessageDialog("서버에 연결할 수 없습니다. 네트워크 연결 및 서버 주소를 제대로 입력했는 지 확인해 주세요.");
+                else if(e.getMessage().contains("invalid username/password; logon denied"))
+                    showMessageDialog("올바르지 않은 ID/비밀번호 입니다.");
+                else
+                    showMessageDialog(e.getMessage());
+                System.exit(1);
+            }
+        } else {
+            System.exit(0);
+        }
         UIManager.put("swing.boldMetal", Boolean.FALSE);
 
         setTitle("호텔 예약 관리 프로그램");
@@ -209,7 +265,7 @@ class HotelGUI extends JFrame implements ActionListener{
         nameLabel.setBounds(15, 30, 60, 20);
         queryStaffNameField = new JTextField();
         queryStaffNameField.setBounds(80, 30, 90, 20);
-        addStaffButton = new JButton("회원가입");
+        addStaffButton = new JButton("직원등록");
         addStaffButton.setBounds(10, 70, 95, 20);
         queryStaffButton = new JButton("조회");
         queryStaffButton.setBounds(120, 70, 70, 20);
@@ -254,7 +310,34 @@ class HotelGUI extends JFrame implements ActionListener{
         }
     }
 
-
+    int getIndex(String[][] customers) {
+        int selectedIndex;
+        if(customers.length > 2) {
+            System.out.println("동명이인");
+            String[] items = Arrays.stream(customers)
+                    .skip(1)
+                    .map(i -> String.format("이름: %s, 성별: %s, 지역: %s, 전화번호: %s", i[1], i[2], i[3], i[4]))
+                    .toArray(String[]::new);
+            String s = (String)JOptionPane.showInputDialog(
+                    this,
+                    "동명이인이 존재합니다.\n찾으려고 하는 사람을 선택하세요.",
+                    "동명이인 선택",
+                    JOptionPane.PLAIN_MESSAGE,
+                    null,
+                    items,
+                    items[0]);
+            if(s != null)
+                selectedIndex = Arrays.asList(items).indexOf(s) + 1;
+            else
+                selectedIndex = -2;
+        }
+        else if(customers.length == 1) {
+            selectedIndex = -1;
+        } else {
+            selectedIndex = 1;
+        }
+        return selectedIndex;
+    }
 
     @Override
     public void actionPerformed(ActionEvent e) {
@@ -273,7 +356,13 @@ class HotelGUI extends JFrame implements ActionListener{
                 }
             }
             try {
-                String result = management.makeReservation(customerName, checkInDate, nights, roomNo);
+                String[][] customers = management.getCustomersByName(customerName);
+                Arrays.asList(customers).forEach(s -> System.out.println(Arrays.toString(s)));
+                int selectedIndex = getIndex(customers);
+                if(selectedIndex == -1)
+                    showMessageDialog("존재하지 않는 고객입니다");
+                else if(selectedIndex == -2) return;
+                String result = management.makeReservation(customers[selectedIndex][Arrays.asList(customers[0]).indexOf("ID")], checkInDate, nights, roomNo);
                 if(result.substring(0, 2).equals("E:")) {
                     switch (result.substring(2)) {
                         case "NO_SUCH_CUSTOMER":
@@ -282,35 +371,50 @@ class HotelGUI extends JFrame implements ActionListener{
                         case "ALREADY_RESERVED":
                             showMessageDialog("이미 예약되었습니다.");
                             break;
-                        default:
-                            showMessageDialog(result.substring(2));
-                            break;
-                }
-                } else {
-                    showMessageDialog("예약되었습니다");
-                    updateReservationStatus();
-                }
-            } catch (SQLException e1) {
-                e1.printStackTrace();
-            }
-        } else if(e.getSource() == reservationCancelButton) {
-            String customerName = reservationNameField.getText();
-            String checkInDate = reservationCheckInField.getText();
-            try {
-                String result = management.cancelReservation(customerName, checkInDate);
-                if(result.substring(0, 2).equals("E:")) {
-                    switch (result.substring(2)) {
-                        case "NO_SUCH_RESERVATION":
-                            showMessageDialog("존재하지 않는 예약입니다");
-                            break;
+                        case "NO_STAFF":
+                            showMessageDialog("예약을 담당할 직원이 없습니다.");
                         default:
                             showMessageDialog(result.substring(2));
                             break;
                     }
                 } else {
+                    showMessageDialog("예약되었습니다");
+                    updateReservationStatus();
+                }
+
+
+            } catch (java.sql.SQLException e1) {
+                System.out.println(e1.getMessage());
+                if(e1.getMessage().contains("ORA-04098"))
+                    showMessageDialog("무결성 검증에 실패했습니다");
+                else if(e1.getMessage().contains("INTEGRITY_VIOLATE"))
+                    showMessageDialog("이미 예약된 방입니다");
+                else if(e1.getMessage().contains("RESERVATION_EDIT")) {
+                    showMessageDialog("이미 예약이 있으므로 예약이 수정되었습니다.");
+                    updateReservationStatus();
+                }
+                else
+                    e1.printStackTrace();
+
+            }
+        } else if(e.getSource() == reservationCancelButton) {
+            String customerName = reservationNameField.getText();
+            String checkInDate = reservationCheckInField.getText();
+            try {
+                String[][] customers = management.getCustomersByName(customerName);
+                Arrays.asList(customers).forEach(s -> System.out.println(Arrays.toString(s)));
+                int selectedIndex = getIndex(customers);
+                if(selectedIndex == -1)
+                    showMessageDialog("존재하지 않는 고객입니다");
+                else if(selectedIndex == -2) return;
+                int result = management.cancelReservation(customers[selectedIndex][Arrays.asList(customers[0]).indexOf("ID")], checkInDate);
+                if(result == 0) {
+                     showMessageDialog("존재하지 않는 예약입니다");
+                } else {
                     showMessageDialog("취소되었습니다");
                     updateReservationStatus();
                 }
+
             } catch (SQLException e1) {
                 e1.printStackTrace();
             }
@@ -318,7 +422,14 @@ class HotelGUI extends JFrame implements ActionListener{
             new CustomerRegistrationDialog(this, "고객 등록", management.connector);
         } else if(e.getSource() == queryCustomerButton) {
             try {
-                String result = management.queryCustomer(queryCustomerNameField.getText());
+                String[][] customers = management.getCustomersByName(queryCustomerNameField.getText());
+                int selectedIndex = getIndex(customers);
+                if(selectedIndex == -1) {
+                    customerQueryResultArea.setText("그런 고객이 없습니다");
+                    return;
+                }
+                else if(selectedIndex == -2) return;
+                String result = management.queryCustomerById(customers[selectedIndex][Arrays.asList(customers[0]).indexOf("ID")]);
                 if(result.substring(0, 2).equals("E:")) {
                     switch (result.substring(2)) {
                         case "NO_SUCH_CUSTOMER":
@@ -338,7 +449,13 @@ class HotelGUI extends JFrame implements ActionListener{
             new StaffRegistrationDialog(this, "직원 등록", management.connector);
         } else if(e.getSource() == queryStaffButton) {
             try {
-                String result = management.queryStaff(queryStaffNameField.getText());
+                String[][] staffs = management.getStaffsByName(queryStaffNameField.getText());
+                int selectedIndex = getIndex(staffs);
+                if(selectedIndex == -1) {
+                    customerQueryResultArea.setText("그런 직원이 없습니다");
+                    return;
+                }
+                String result = management.queryStaffById(staffs[selectedIndex][Arrays.asList(staffs[0]).indexOf("ID")]);
                 System.out.println(result);
                 if(result.substring(0, 2).equals("E:")) {
                     switch (result.substring(2)) {
@@ -377,11 +494,10 @@ class HotelGUI extends JFrame implements ActionListener{
         } else if(e.getSource() == open) {
             FileDialog dialog = new FileDialog(this, "Open", FileDialog.LOAD);
             dialog.setVisible(true);
-            if(dialog.getDirectory() == null || dialog.getDirectory().equals(""))
-
+            if(dialog.getFile() == null || dialog.getFile().equals(""))
                 return;
             try {
-                BufferedReader fr = new BufferedReader(new FileReader(dialog.getDirectory()));
+                BufferedReader fr = new BufferedReader(new FileReader(dialog.getDirectory() + "/" + dialog.getFile()));
                 String line = fr.readLine();
                 int customerNo = Integer.parseInt(line);
                 ArrayList<String> customers = new ArrayList<>();
@@ -419,7 +535,7 @@ class HotelGUI extends JFrame implements ActionListener{
                     String[] customerInfo = s.split("\t");
                     Staff.addStaff(management.connector, customerInfo[0], customerInfo[1], customerInfo[2], customerInfo[3]);
                 });
-                customers.forEach(s -> {
+                rooms.forEach(s -> {
                     String[] customerInfo = s.split("\t");
                     Room.addRoom(management.connector, Integer.parseInt(customerInfo[0]), Integer.parseInt(customerInfo[1]), customerInfo[2]);
                 });

@@ -7,28 +7,21 @@ public class Connector {
 
     private Connection dbTest;
 
-    Connector() {
+    Connector() throws Exception {
         connectDB("localhost", id, pw);
     }
 
-    Connector(String addr) {
+    Connector(String addr) throws Exception {
         connectDB(addr, id, pw);
     }
 
-    Connector(String addr, String id, String pw) {
+    Connector(String addr, String id, String pw) throws Exception {
         connectDB(addr, id, pw);
     }
-    private void connectDB(String addr, String id, String pw) {
-        try {
-            Class.forName("oracle.jdbc.OracleDriver");
-            dbTest = DriverManager.getConnection("jdbc:oracle:thin:" + "@" + addr + ":1521:XE", id, pw);
-            System.out.println("DB에 연결되었습니다.");
-        } catch (SQLException e) {
-            System.out.println("연결에 실패하였습니다.");
-            e.printStackTrace();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+    private void connectDB(String addr, String id, String pw) throws Exception {
+        Class.forName("oracle.jdbc.OracleDriver");
+        dbTest = DriverManager.getConnection("jdbc:oracle:thin:" + "@" + addr + ":1521:XE", id, pw);
+        System.out.println("DB에 연결되었습니다.");
     }
 
     boolean executeQuery(String query) throws SQLException {
@@ -38,6 +31,12 @@ public class Connector {
         rs.close();
         stmt.close();
         return true;
+    }
+
+    int executeUpdate(String query) throws SQLException {
+        PreparedStatement stmt = dbTest.prepareStatement(query);
+        System.out.println("Executing query " + query);
+        return stmt.executeUpdate();
     }
     String[][] getQueryResult(String query) throws SQLException {
         if(dbTest == null)
